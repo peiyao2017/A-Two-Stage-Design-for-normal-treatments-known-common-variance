@@ -1,6 +1,6 @@
 ---
 title: "Optimal Parameter Search for the Two-Stage Design"
-output: github_document
+output: html_document
 ---
 
 # Overview
