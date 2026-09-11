@@ -1,0 +1,332 @@
+---
+title: "Optimal Parameter Search for the Two-Stage Design"
+output: html_document
+---
+
+# Overview
+
+This folder contains the R functions used to search for optimal design parameters for the proposed two-stage treatment-selection procedure with known common variance and known reference mean.
+
+The main R file is:
+
+`R functions for optimal parameters search.R`
+
+Before running any simulation or optimization, first run this file so that all required R functions are defined in the current R session.
+
+```{r setup, message=FALSE, warning=FALSE}
+source("C:/Users/n01654025/Downloads/R functions/R functions for optimal parameters search.R")
+```
+
+If the working directory is already the `R functions` folder, use:
+
+```{r eval=FALSE}
+source("R functions for optimal parameters search.R")
+```
+
+The file defines three helper functions and two main optimization functions.
+
+# Functions
+
+## `stage1_power()`
+
+This helper function computes the Stage-I power under the least favorable configuration.
+
+```r
+stage1_power(n1, gamma, delta1, delta2, k, sigma)
+```
+
+Arguments:
+
+- `n1`: Stage-I sample size for each experimental treatment.
+- `gamma`: Stage-I screening cutoff increment.
+- `delta1`: Lower efficacy margin.
+- `delta2`: Target efficacy margin.
+- `k`: Number of experimental treatments.
+- `sigma`: Known common standard deviation.
+
+## `stage2_sample_size()`
+
+This helper function computes the Stage-II sample size required to achieve a specified Stage-II power.
+
+```r
+stage2_sample_size(power2, alpha, delta2, sigma)
+```
+
+Arguments:
+
+- `power2`: Desired Stage-II power, \(1-\beta_2\).
+- `alpha`: One-sided Stage-II significance level.
+- `delta2`: Target efficacy margin.
+- `sigma`: Known common standard deviation.
+
+## `sampling_quantities()`
+
+This helper function computes the sampling characteristics of a candidate design.
+
+```r
+sampling_quantities(n1, n2, gamma, delta1, delta2, k, sigma)
+```
+
+Arguments:
+
+- `n1`: Stage-I sample size per experimental treatment.
+- `n2`: Stage-II sample size for the selected treatment.
+- `gamma`: Stage-I screening cutoff increment.
+- `delta1`: Lower efficacy margin.
+- `delta2`: Target efficacy margin.
+- `k`: Number of experimental treatments.
+- `sigma`: Known common standard deviation.
+
+The function returns the probability of terminating after Stage I under the global null, expected sample sizes under the global null and LFC, the sampling-cost criterion, and the maximum possible sample size.
+
+## `optimize_design1()`
+
+Use this function when only the overall power is specified.
+
+```r
+optimize_design1(
+  n1_range, gamma_range, overall_power, alpha,
+  delta1, delta2, k, sigma
+)
+```
+
+Arguments:
+
+- `n1_range`: Candidate integer values of the Stage-I sample size.
+- `gamma_range`: Candidate values of the Stage-I screening cutoff increment.
+- `overall_power`: Target overall power, \(1-\beta\).
+- `alpha`: One-sided Stage-II significance level.
+- `delta1`: Lower efficacy margin.
+- `delta2`: Target efficacy margin.
+- `k`: Number of experimental treatments.
+- `sigma`: Known common standard deviation.
+
+For each candidate `(n1, gamma)` pair, the function computes Stage-I power and retains pairs for which Stage-I power is strictly larger than the target overall power. It then determines the required Stage-II power, computes `n2`, and selects the design minimizing the sampling-cost criterion.
+
+The returned vector contains `n1`, `n2`, `gamma`, `P_terminate_null`, `EN_null`, `EN_LFC`, `cost`, `Nmax`, `power_stage1`, and `power_stage2`.
+
+## `optimize_design2()`
+
+Use this function when both the overall power and Stage-II power are specified.
+
+```r
+optimize_design2(
+  n1_range, gamma_range, overall_power, stage2_power,
+  alpha, delta1, delta2, k, sigma
+)
+```
+
+Arguments:
+
+- `n1_range`: Candidate integer values of the Stage-I sample size.
+- `gamma_range`: Candidate values of the Stage-I screening cutoff increment.
+- `overall_power`: Target overall power, \(1-\beta\).
+- `stage2_power`: Prespecified Stage-II power, \(1-\beta_2\).
+- `alpha`: One-sided Stage-II significance level.
+- `delta1`: Lower efficacy margin.
+- `delta2`: Target efficacy margin.
+- `k`: Number of experimental treatments.
+- `sigma`: Known common standard deviation.
+
+The Stage-II power must be strictly larger than the overall power. The function first computes `n2`, then searches over `(n1, gamma)` and retains designs satisfying the Stage-I power requirement. Among feasible designs, it selects the one minimizing the sampling-cost criterion.
+
+The returned vector contains the same quantities as `optimize_design1()`.
+
+# Illustrative Example 1: Table 1
+
+The first example reproduces the simulation used for Table 1.
+
+The simulation settings are:
+
+- \(k=2,3,4,5\);
+- overall power \(1-\beta=0.70,0.75,0.80,0.85,0.90\);
+- \(\delta_2=0.20,0.30\);
+- \(\delta_1=0\);
+- \(\alpha=0.05\);
+- \(\sigma=1\);
+- `n1_range = 10:500`;
+- `gamma_range = seq(0, 0.20, by = 0.005)`.
+
+```{r table1-computation}
+k_values <- 2:5
+overall_power_values <- seq(0.70, 0.90, by = 0.05)
+delta2_values <- c(0.20, 0.30)
+
+delta1 <- 0
+alpha <- 0.05
+sigma <- 1
+
+n1_range <- 10:500
+gamma_range <- seq(0, 0.20, by = 0.005)
+
+table_results <- list()
+count <- 0
+
+for (k in k_values) {
+  for (overall_power in overall_power_values) {
+    for (delta2 in delta2_values) {
+
+      fit <- optimize_design1(
+        n1_range = n1_range,
+        gamma_range = gamma_range,
+        overall_power = overall_power,
+        alpha = alpha,
+        delta1 = delta1,
+        delta2 = delta2,
+        k = k,
+        sigma = sigma
+      )
+
+      count <- count + 1
+
+      table_results[[count]] <- data.frame(
+        k = k,
+        overall_power = overall_power,
+        delta2 = delta2,
+        n1 = as.integer(fit["n1"]),
+        n2 = as.integer(fit["n2"]),
+        gamma = as.numeric(fit["gamma"]),
+        E0_N = as.numeric(fit["EN_null"]),
+        cost = as.numeric(fit["cost"]),
+        Nmax = as.integer(fit["Nmax"]),
+        one_minus_pi0 = as.numeric(fit["P_terminate_null"]),
+        stage1_power = as.numeric(fit["power_stage1"]),
+        stage2_power = as.numeric(fit["power_stage2"])
+      )
+    }
+  }
+}
+
+design_table1 <- do.call(rbind, table_results)
+design_table1 <- unique(design_table1)
+rownames(design_table1) <- NULL
+
+if (nrow(design_table1) != 40) {
+  warning(paste("Expected 40 rows, but obtained", nrow(design_table1), "rows."))
+}
+```
+
+## Print Table 1
+
+```{r table1-output}
+design_table1
+```
+
+```{r table1-kable}
+knitr::kable(
+  design_table1,
+  digits = c(0, 2, 2, 0, 0, 3, 2, 2, 0, 2, 2, 2),
+  caption = "Optimal designs when only the overall power is prespecified."
+)
+```
+
+# Illustrative Example 2: Table 2
+
+The second example uses both prespecified overall power and Stage-II power.
+
+The simulation settings are:
+
+- \(k=2,3,4,5\);
+- overall power \(1-\beta=0.70,0.80\);
+- Stage-II power \(1-\beta_2=0.80,0.90\), subject to Stage-II power being strictly larger than overall power;
+- \(\delta_2=0.20,0.30\);
+- \(\delta_1=0\);
+- \(\alpha=0.05\);
+- \(\sigma=1\);
+- `n1_range = 10:500`;
+- `gamma_range = seq(0, 0.20, by = 0.005)`.
+
+For overall power 0.70, Stage-II powers 0.80 and 0.90 are used. For overall power 0.80, only Stage-II power 0.90 is used.
+
+```{r table2-computation}
+k_values <- 2:5
+overall_power_values <- c(0.70, 0.80)
+delta2_values <- c(0.20, 0.30)
+
+delta1 <- 0
+alpha <- 0.05
+sigma <- 1
+
+n1_range <- 10:500
+gamma_range <- seq(0, 0.20, by = 0.005)
+
+table2_results <- list()
+count <- 0
+
+for (k in k_values) {
+  for (overall_power in overall_power_values) {
+
+    if (overall_power == 0.70) {
+      stage2_power_values <- c(0.80, 0.90)
+    }
+
+    if (overall_power == 0.80) {
+      stage2_power_values <- c(0.90)
+    }
+
+    for (stage2_power in stage2_power_values) {
+      for (delta2 in delta2_values) {
+
+        fit <- optimize_design2(
+          n1_range = n1_range,
+          gamma_range = gamma_range,
+          overall_power = overall_power,
+          stage2_power = stage2_power,
+          alpha = alpha,
+          delta1 = delta1,
+          delta2 = delta2,
+          k = k,
+          sigma = sigma
+        )
+
+        count <- count + 1
+
+        table2_results[[count]] <- data.frame(
+          k = k,
+          overall_power = overall_power,
+          stage2_power = stage2_power,
+          delta2 = delta2,
+          n1 = as.integer(fit["n1"]),
+          n2 = as.integer(fit["n2"]),
+          gamma = as.numeric(fit["gamma"]),
+          E0_N = as.numeric(fit["EN_null"]),
+          cost = as.numeric(fit["cost"]),
+          Nmax = as.integer(fit["Nmax"]),
+          one_minus_pi0 = as.numeric(fit["P_terminate_null"]),
+          stage1_power = as.numeric(fit["power_stage1"])
+        )
+      }
+    }
+  }
+}
+
+design_table2 <- do.call(rbind, table2_results)
+design_table2 <- unique(design_table2)
+rownames(design_table2) <- NULL
+
+if (nrow(design_table2) != 24) {
+  warning(paste("Expected 24 rows, but obtained", nrow(design_table2), "rows."))
+}
+```
+
+## Print Table 2
+
+```{r table2-output}
+design_table2
+```
+
+```{r table2-kable}
+knitr::kable(
+  design_table2,
+  digits = c(0, 2, 2, 2, 0, 0, 3, 2, 2, 0, 2, 2),
+  caption = "Optimal designs when both overall power and Stage-II power are prespecified."
+)
+```
+
+# Notes
+
+The optimization uses a grid search over `n1_range` and `gamma_range`. A finer grid can provide a more detailed search but will require more computation time.
+
+If no feasible design is found, enlarge the search ranges.
+
+To generate a GitHub README, knit this file using the `github_document` output format. This creates a `README.md` file that can be uploaded together with the R source file.
